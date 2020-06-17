@@ -1,4 +1,7 @@
 """
+2020/06/16
+This code is adapted to Python 3 by Zuohan Zhao.
+
 This code is adapted from Deep Learning Tutorials http://deeplearning.net/tutorial/
 
 Copyright (c) 2008-2013, Theano Development Team All rights reserved.
@@ -30,7 +33,7 @@ Options:
 
 """
 
-import cPickle
+import pickle
 import gzip
 import os
 import sys
@@ -88,7 +91,7 @@ class SdA(object):
         # allocate symbolic variables for the data
         self.x = T.matrix('x')  
 
-        for i in xrange(self.n_layers):
+        for i in range(self.n_layers):
             # construct the DA layer
 
             # the size of the input is either the number of hidden units of
@@ -133,7 +136,7 @@ class SdA(object):
         corruption_level = T.scalar('corruption')  # % of corruption to use
         learning_rate = T.scalar('lr')  # learning rate to use
         # number of batches
-        n_batches = train_set_x.get_value(borrow=True).shape[0] / batch_size
+        n_batches = int( train_set_x.get_value(borrow=True).shape[0] / batch_size )
         # begining of a batch, given `index`
         batch_begin = index * batch_size
         # ending of a batch given `index`
@@ -142,16 +145,14 @@ class SdA(object):
         train_fns = []
         for dA in self.dA_layers:
             # get the cost and the updates list
-            cost, updates = dA.get_cost_updates(corruption_level,
-                                                learning_rate)
+            cost, updates = dA.get_cost_updates(corruption_level, learning_rate)
             # compile the theano function
             fn = theano.function(inputs=[index,
-                              theano.Param(corruption_level, default=0.2),
-                              theano.Param(learning_rate, default=0.1)],
+                                         theano.In(corruption_level, value=0.2),
+                                         theano.In(learning_rate, value=0.1)],
                                  outputs=cost,
                                  updates=updates,
-                                 givens={self.x: train_set_x[batch_begin:
-                                                             batch_end]})
+                                 givens={self.x: train_set_x[batch_begin:batch_end]})
             # append `fn` to the list of functions
             train_fns.append(fn)
 
@@ -214,13 +215,13 @@ def train_SdA(training_epochs=15, train_lr=0.001, data_file = None, skip_col = 2
     
     datasets = PCLfile(data_file, skip_col)    
     train_set_x, sample_id = datasets.get_permuted_sample(seed = random_seed_2)#Permute the order of samples using random_seed_2
-    print '... finish reading the data'
+    print('... finish reading the data')
 
     train_set_x = theano.shared(train_set_x,borrow=True)
 
     # compute number of minibatches for training
     train_size = train_set_x.get_value(borrow=True).shape[0]
-    n_train_batches = train_size / batch_size
+    n_train_batches = int( train_size / batch_size )
 
     # numpy random generator
     numpy_rng = numpy.random.RandomState(random_seed_1)
@@ -228,73 +229,73 @@ def train_SdA(training_epochs=15, train_lr=0.001, data_file = None, skip_col = 2
     # the number of input nodes
     input_node = len(datasets.id_list)
 
-    print '... building the model'
+    print('... building the model')
     # construct the stacked denoising autoencoder class
-    sda = SdA(numpy_rng=numpy_rng, n_ins= input_node,
+    sda = SdA(numpy_rng=numpy_rng, 
+              n_ins= input_node,
               hidden_layers_sizes= net_structure)
 
     #########################
     # TRAINING THE MODEL #
     #########################
-    print '... getting the training functions'
+    print('... getting the training functions')
     training_fns = sda.training_functions(train_set_x=train_set_x,
                                           batch_size=batch_size)
 
-    print '... training the model'
-    start_time = time.clock()
+    print('... training the model')
+    start_time = time.perf_counter()
     ## Train layer-wise
     corruption_levels = corruption_levels
-    for i in xrange(sda.n_layers):
+    for i in range(sda.n_layers):
         # go through training epochs
-        for epoch in xrange(training_epochs):
+        for epoch in range(training_epochs):
             # go through the training set
             c = []
-            for batch_index in xrange(n_train_batches):
+            for batch_index in range(n_train_batches):
                 c.append(training_fns[i](index=batch_index,
-                         corruption=corruption_levels[i],
-                         lr=train_lr))
-            print 'Training layer %i, epoch %d, cost ' % (i, epoch),
-            print numpy.mean(c)
+                                         corruption=corruption_levels[i],
+                                         lr=train_lr))
+            print('Training layer %i, epoch %d, cost ' % (i, epoch), numpy.mean(c))
             logging.info('Training layer %i, epoch %d, cost %f ' % (i, epoch, numpy.mean(c) ))
 
-    end_time = time.clock()
+    end_time = time.perf_counter()
 
     logging.info('The training code for file ' + os.path.split(__file__)[1] + ' ran for %.2fm' % ((end_time - start_time) / 60.))
-    print '... training finished.'
+    print('... training finished.')
 
     ##############################################################
     # Return the final activity value and raw activity value
     # for each node of each input sample 
     ##############################################################
-    output_fh = open(output_file,'w')
-    raw_output_fh = open(output_file.replace('activity','rawActivity'),'w')
-    each_layer_output = sda.return_activity(train_set_x=train_set_x)
-    each_layer_raw_output = sda.return_raw_activity(train_set_x=train_set_x)
-    for i in xrange(sda.n_layers):
-        output_fh.write('layer %i \n' %(i+1))
-        raw_output_fh.write('layer %i \n' %(i+1))
-        for train_sample in xrange(train_size):
-            node_activation = each_layer_output[i](train_sample)
-            node_raw_activation = each_layer_raw_output[i](train_sample)
-            output_fh.write(sample_id[train_sample]+'\t')
-            raw_output_fh.write(sample_id[train_sample]+'\t')
-            numpy.savetxt(output_fh, node_activation, fmt= '%.8f', delimiter= '\t') 
-            numpy.savetxt(raw_output_fh, node_raw_activation, fmt= '%.8f', delimiter= '\t') 
+    with open(output_file,'w') as output_fh:
+        with open(output_file.replace('activity','rawActivity'),'w') as raw_output_fh:
+            each_layer_output = sda.return_activity(train_set_x=train_set_x)
+            each_layer_raw_output = sda.return_raw_activity(train_set_x=train_set_x)
+            for i in range(sda.n_layers):
+                output_fh.write('layer %i \n' %(i+1))
+                raw_output_fh.write('layer %i \n' %(i+1))
+                for train_sample in range(train_size):
+                    node_activation = each_layer_output[i](train_sample)
+                    node_raw_activation = each_layer_raw_output[i](train_sample)
+                    output_fh.write(sample_id[train_sample]+'\t')
+                    raw_output_fh.write(sample_id[train_sample]+'\t')
+                    numpy.savetxt(output_fh, node_activation, fmt= '%.8f', delimiter= '\t') 
+                    numpy.savetxt(raw_output_fh, node_raw_activation, fmt= '%.8f', delimiter= '\t') 
 
 
     ##############################################################
     # Return weight matrix and bias vectors of the final network #
     ##############################################################
-    net_file = open(net_file,'w')
-    weight_output, bias_output, bias_prime_output = sda.return_network()
-    for i in xrange(len(weight_output)):
-        net_file.write('layer %i \n' %(i+1))
-        net_file.write('weight matrix \n')
-        numpy.savetxt(net_file, weight_output[i], fmt= '%.8f', delimiter = '\t') 
-        net_file.write('hidden bias vector \n')
-        numpy.savetxt(net_file, bias_output[i], fmt= '%.8f', delimiter = '\t')
-        net_file.write('visible bias vector \n')
-        numpy.savetxt(net_file, bias_prime_output[i], fmt= '%.8f', delimiter = '\t')
+    with open(net_file,'w') as net_file:
+        weight_output, bias_output, bias_prime_output = sda.return_network()
+        for i in range(len(weight_output)):
+            net_file.write('layer %i \n' %(i+1))
+            net_file.write('weight matrix \n')
+            numpy.savetxt(net_file, weight_output[i], fmt= '%.8f', delimiter = '\t') 
+            net_file.write('hidden bias vector \n')
+            numpy.savetxt(net_file, bias_output[i], fmt= '%.8f', delimiter = '\t')
+            net_file.write('visible bias vector \n')
+            numpy.savetxt(net_file, bias_prime_output[i], fmt= '%.8f', delimiter = '\t')
 
 
 if __name__ == '__main__':
@@ -303,4 +304,14 @@ if __name__ == '__main__':
     input_file = arguments['<input-file>']
     network_stru = [int(x) for x in arguments['<net-structure>'].strip().split(',')]
     corrupt_levels = [float(x) for x in arguments['<corruption-level>'].strip().split(',')]
-    train_SdA(training_epochs=int(arguments['<epoch-size>']) ,train_lr=float(arguments['<learning-rate>']), data_file= input_file, skip_col= int(arguments['<skip-col>']),batch_size=int(arguments['<batch-size>']), random_seed_1 = int(arguments['--seed1']), random_seed_2 = int(arguments['--seed2']), net_structure = network_stru, corruption_levels = corrupt_levels, output_file = input_file.replace('.pcl', '')+'_'+ arguments['<net-structure>']+'_batch'+arguments['<batch-size>'] + '_epoch' + arguments['<epoch-size>'] + '_corrupt' + arguments['<corruption-level>'] + '_lr' +arguments['<learning-rate>']  + '_seed1_' + arguments['--seed1'] + '_seed2_' + arguments['--seed2']  + "_activity_SdA.txt", net_file = input_file.replace('.pcl', '')+'_'+ arguments['<net-structure>'] +'_batch'+ arguments['<batch-size>'] + '_epoch' + arguments['<epoch-size>'] + '_corrupt' + arguments['<corruption-level>'] +  '_lr' +arguments['<learning-rate>'] + '_seed1_' + arguments['--seed1']+ '_seed2_' + arguments['--seed2'] +"_network_SdA.txt")
+    train_SdA(training_epochs=int(arguments['<epoch-size>']),
+              train_lr=float(arguments['<learning-rate>']), 
+              data_file= input_file, 
+              skip_col= int(arguments['<skip-col>']),
+              batch_size=int(arguments['<batch-size>']), 
+              random_seed_1 = int(arguments['--seed1']), 
+              random_seed_2 = int(arguments['--seed2']), 
+              net_structure = network_stru, 
+              corruption_levels = corrupt_levels, 
+              output_file = input_file.replace('.pcl', '')+'_'+ arguments['<net-structure>']+'_batch'+arguments['<batch-size>'] + '_epoch' + arguments['<epoch-size>'] + '_corrupt' + arguments['<corruption-level>'] + '_lr' +arguments['<learning-rate>']  + '_seed1_' + arguments['--seed1'] + '_seed2_' + arguments['--seed2']  + "_activity_SdA.txt", 
+              net_file = input_file.replace('.pcl', '')+'_'+ arguments['<net-structure>'] +'_batch'+ arguments['<batch-size>'] + '_epoch' + arguments['<epoch-size>'] + '_corrupt' + arguments['<corruption-level>'] +  '_lr' +arguments['<learning-rate>'] + '_seed1_' + arguments['--seed1']+ '_seed2_' + arguments['--seed2'] +"_network_SdA.txt")

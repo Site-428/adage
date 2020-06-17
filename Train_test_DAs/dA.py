@@ -45,7 +45,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS "AS IS" AND ANY EXPRESS OR IM
 
 """
 
-import cPickle
+import pickle
 import gzip
 import os
 import sys
